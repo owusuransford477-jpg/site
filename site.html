@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GlowMall — Order & Delivery</title>
+  <meta name="description" content="Single-file order & delivery site: catalog, cart, checkout, tracking." />
+  <style>
+    :root { --bg:#0b0b0f; --card:#12121a; --text:#eaeaf1; --accent:#6cf0c2; --muted:#8a94a6; --line:#1b2030; }
+    * { box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); font:16px/1.6 system-ui, -apple-system, Segoe UI; margin:0; }
+    header { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px; padding:12px 16px; background:linear-gradient(90deg,#0b0b0f,#0f1420); border-bottom:1px solid #161a22; }
+    .logo { font-weight:800; letter-spacing:.3px; text-decoration:none; color:var(--text); }
+    .nav { display:flex; gap:8px; }
+    .btn { background:var(--card); color:var(--text); border:1px solid #1f2533; padding:10px 14px; border-radius:12px; transition:.2s ease; text-decoration:none; display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+    .btn:hover { border-color:var(--accent); box-shadow:0 0 18px rgba(108,240,194,.25); transform:translateY(-1px); }
+    .badge { background:var(--accent); color:#041a14; border-radius:30px; padding:2px 8px; font-weight:700; }
+    .search input { background:#0d1320; border:1px solid #1c2232; color:var(--text); padding:8px 10px; border-radius:10px; width:240px; }
+    main { max-width:1200px; margin:0 auto; padding:16px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:16px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+    .card img { width:100%; height:180px; object-fit:cover; border-radius:12px; }
+    .card h3 { margin:10px 0 6px; }
+    .price { color:var(--accent); font-weight:800; }
+    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .added { box-shadow:0 0 30px rgba(108,240,194,.45); }
+    .table { width:100%; border-collapse:collapse; margin-top:12px; }
+    .table th, .table td { border-bottom:1px solid var(--line); padding:8px; text-align:left; }
+    .kpi { display:flex; gap:16px; }
+    .kpi .card { flex:1; }
+    .flex { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .form { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
+    .form .full { grid-column:1 / -1; }
+    .timeline { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+    .step { background:#0d1320; border:1px solid #1c2232; padding:10px; border-radius:10px; }
+    .muted { color:var(--muted); }
+    .hidden { display:none !important; }
+    .pill { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:#0d1320; color:var(--text); }
+    .tabs { display:flex; gap:8px; margin:8px 0 16px; }
+    .tabs .btn.active { border-color:var(--accent); color:var(--accent); }
+    @media (prefers-reduced-motion: reduce) { .btn, .added { transition:none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="logo" href="#" data-nav="home">GlowMall</a>
+    <nav class="nav">
+      <a class="btn" href="#" data-nav="home">Home</a>
+      <a class="btn" href="#" data-nav="cart">Cart <span class="badge" data-cart-count>0</span></a>
+      <a class="btn" href="#" data-nav="orders">My orders</a>
+      <a class="btn" href="#" data-nav="admin">Admin</a>
+    </nav>
+    <div class="flex" style="margin-left:auto;">
+      <input id="searchInput" type="search" placeholder="Search products..." />
+      <select id="categoryFilter" class="pill">
+        <option value="">All</option>
+        <option value="footwear">Footwear</option>
+        <option value="clothing">Clothing</option>
+        <option value="gadgets">Gadgets</option>
+        <option value="foodstuffs">Foodstuffs</option>
+      </select>
+      <select id="sortBy" class="pill">
+        <option value="new">Newest</option>
+        <option value="price_asc">Price ↑</option>
+        <option value="price_desc">Price ↓</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <!-- Home -->
+    <section id="page-home">
+      <h1>Explore products</h1>
+      <div class="grid" id="productGrid"></div>
+    </section>
+
+    <!-- Product modal -->
+    <dialog id="productModal" class="card" style="max-width:720px;">
+      <div class="flex" style="justify-content:space-between;">
+        <h2 id="pm-name"></h2>
+        <button class="btn" id="pm-close">Close</button>
+      </div>
+      <img id="pm-img" src="" alt="" style="height:280px;"/>
+      <p id="pm-desc"></p>
+      <div class="flex">
+        <div class="price" id="pm-price"></div>
+        <span class="pill" id="pm-category"></span>
+        <span class="pill" id="pm-stock"></span>
+      </div>
+      <div class="controls" style="margin-top:8px;">
+        <button class="btn" id="pm-add">Add to cart</button>
+        <button class="btn" id="pm-goto">Go to cart</button>
+      </div>
+    </dialog>
+
+    <!-- Cart -->
+    <section id="page-cart" class="hidden">
+      <h1>Your cart</h1>
+      <table class="table" id="cartTable">
+        <thead><tr><th>Item</th><th>Unit</th><th>Qty</th><th>Total</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="flex" style="margin-top:10px;">
+        <h3>Grand total: <span id="cartTotal">GHS 0</span></h3>
+        <span class="muted">Shipping calculated at checkout</span>
+      </div>
+      <div class="controls" style="margin-top:10px;">
+        <button class="btn" data-nav="checkout">Proceed to checkout</button>
+        <button class="btn" id="clearCart">Clear cart</button>
+      </div>
+    </section>
+
+    <!-- Checkout -->
+    <section id="page-checkout" class="hidden">
+      <h1>Checkout</h1>
+      <div class="card">
+        <form id="addressForm" class="form">
+          <input class="full" name="name" placeholder="Full name" required />
+          <input name="phone" placeholder="Phone" required />
+          <input class="full" name="line1" placeholder="Address line" required />
+          <input name="city" placeholder="City" required />
+          <input name="region" placeholder="Region" required />
+          <input class="full" name="notes" placeholder="Notes (optional)" />
+        </form>
+        <h3>Summary</h3>
+        <ul id="summaryList"></ul>
+        <div>Total: <strong id="sumTotal">GHS 0</strong></div>
+        <div class="flex">
+          <label class="pill"><input type="checkbox" id="saveAddress" /> Save address</label>
+          <label class="pill"><input type="checkbox" id="smsNotify" checked /> SMS updates</label>
+        </div>
+        <div class="tabs">
+          <button class="btn active" data-pay="mock">Mock Pay</button>
+          <button class="btn" data-pay="cash">Cash on delivery</button>
+        </div>
+        <button class="btn" id="placeOrder">Place order</button>
+        <div class="muted" style="margin-top:8px;">Payment is simulated in this HTML-only demo.</div>
+      </div>
+    </section>
+
+    <!-- Orders -->
+    <section id="page-orders" class="hidden">
+      <h1>My orders</h1>
+      <div id="ordersList" class="grid"></div>
+    </section>
+
+    <!-- Track -->
+    <section id="page-track" class="hidden">
+      <h1>Track your order</h1>
+      <div id="trackView"></div>
+    </section>
+
+    <!-- Admin -->
+    <section id="page-admin" class="hidden">
+      <h1>Admin dashboard</h1>
+      <div class="kpi">
+        <div class="card"><h3>Orders</h3><div id="kpi-orders">0</div></div>
+        <div class="card"><h3>Revenue</h3><div id="kpi-revenue">GHS 0</div></div>
+        <div class="card"><h3>Avg delivery time</h3><div id="kpi-avg">—</div></div>
+      </div>
+      <div class="card">
+        <h3>Products</h3>
+        <div class="controls">
+          <button class="btn" id="seedProducts">Seed sample products</button>
+          <button class="btn" id="clearProducts">Clear products</button>
+        </div>
+        <div id="adminProducts" class="grid" style="margin-top:10px;"></div>
+      </div>
+      <div class="card" style="margin-top:12px;">
+        <h3>Deliveries</h3>
+        <div id="adminDeliveries"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Persistent keys
+    const STORE = {
+      products: 'gm_products',
+      cart: 'gm_cart',
+      orders: 'gm_orders',
+      address: 'gm_address',
+      delivery: 'gm_delivery'
+    };
+
+    // Seed data
+    const SAMPLE_PRODUCTS = [
+      { id: 1, name: 'Air Max 97', slug: 'air-max-97', description: 'Sleek comfort with iconic waves.', price: 1299.00, stock_qty: 25, category: 'footwear', image_url: 'https://picsum.photos/seed/airmax/600/400' },
+      { id: 2, name: 'Classic Tee', slug: 'classic-tee', description: 'Soft cotton tee with premium fit.', price: 189.00, stock_qty: 60, category: 'clothing', image_url: 'https://picsum.photos/seed/tee/600/400' },
+      { id: 3, name: 'Smartwatch X', slug: 'smartwatch-x', description: 'Track health and notifications in style.', price: 899.00, stock_qty: 18, category: 'gadgets', image_url: 'https://picsum.photos/seed/watch/600/400' },
+      { id: 4, name: 'Gourmet Burger', slug: 'gourmet-burger', description: 'Juicy flavour, artisan bun.', price: 59.00, stock_qty: 120, category: 'foodstuffs', image_url: 'https://picsum.photos/seed/burger/600/400' }
+    ];
+
+    // Helpers
+    const money = v => new Intl.NumberFormat('en-GH', { style:'currency', currency:'GHS' }).format(v);
+    const read = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
+    const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+    const Products = {
+      all() { return read(STORE.products, []); },
+      set(ps) { write(STORE.products, ps); },
+      seed() {
+        const existing = Products.all();
+        if (existing.length) return existing;
+        Products.set(SAMPLE_PRODUCTS);
+        return SAMPLE_PRODUCTS;
+      },
+      clear() { write(STORE.products, []); }
+    };
+
+    const Cart = {
+      get() { return read(STORE.cart, []); },
+      save(items) { write(STORE.cart, items); Cart.badge(); },
+      add(product, qty=1) {
+        const items = Cart.get();
+        const idx = items.findIndex(i => i.product_id === product.id);
+        if (idx >= 0) items[idx].qty += qty;
+        else items.push({ product_id: product.id, name: product.name, price: product.price, qty });
+        Cart.save(items);
+      },
+      update(id, qty) {
+        const items = Cart.get().map(i => i.product_id === id ? { ...i, qty: Math.max(0, qty) } : i).filter(i => i.qty > 0);
+        Cart.save(items);
+      },
+      clear() { write(STORE.cart, []); Cart.badge(); },
+      total() { return Cart.get().reduce((t,i)=>t+i.price*i.qty,0); },
+      badge() {
+        const el = document.querySelector('[data-cart-count]');
+        if (el) el.textContent = Cart.get().reduce((t,i)=>t+i.qty,0);
+      }
+    };
+
+    const Orders = {
+      all() { return read(STORE.orders, []); },
+      add(order) {
+        const os = Orders.all();
+        os.push(order);
+        write(STORE.orders, os);
+      },
+      byId(id) { return Orders.all().find(o => o.id === id); },
+      revenue() { return Orders.all().reduce((t,o)=>t+o.total_amount,0); }
+    };
+
+    const Delivery = {
+      all() { return read(STORE.delivery, []); },
+      set(list) { write(STORE.delivery, list); },
+      forOrder(orderId) { return Delivery.all().find(d => d.order_id === orderId); },
+      upsert(entry) {
+        const list = Delivery.all();
+        const idx = list.findIndex(d => d.order_id === entry.order_id);
+        if (idx >= 0) list[idx] = { ...list[idx], ...entry };
+        else list.push(entry);
+        Delivery.set(list);
+      }
+    };
+
+    // Navigation
+    const pages = ['home','cart','checkout','orders','track','admin'];
+    function showPage(id) {
+      pages.forEach(p => document.getElementById('page-'+p).classList.toggle('hidden', p !== id));
+      if (id === 'home') renderHome();
+      if (id === 'cart') renderCart();
+      if (id === 'checkout') renderCheckout();
+      if (id === 'orders') renderOrders();
+      if (id === 'track') renderTrackFromHash();
+      if (id === 'admin') renderAdmin();
+      Cart.badge();
+    }
+
+    document.addEventListener('click', (e) => {
+      const nav = e.target.closest('[data-nav]');
+      if (nav) {
+        e.preventDefault();
+        const page = nav.getAttribute('data-nav');
+        showPage(page);
+      }
+    });
+
+    // Filters & sorting
+    document.getElementById('searchInput').addEventListener('input', () => renderHome());
+    document.getElementById('categoryFilter').addEventListener('change', () => renderHome());
+    document.getElementById('sortBy').addEventListener('change', () => renderHome());
+
+    // Product modal
+    const pm = document.getElementById('productModal');
+    document.getElementById('pm-close').addEventListener('click', () => pm.close());
+
+    function openProduct(p) {
+      document.getElementById('pm-name').textContent = p.name;
+      document.getElementById('pm-img').src = p.image_url;
+      document.getElementById('pm-img').alt = p.name;
+      document.getElementById('pm-desc').textContent = p.description || '';
+      document.getElementById('pm-price').textContent = money(p.price);
+      document.getElementById('pm-category').textContent = p.category;
+      document.getElementById('pm-stock').textContent = 'Stock: ' + p.stock_qty;
+      document.getElementById('pm-add').onclick = () => { Cart.add(p,1); pm.classList.add('added'); setTimeout(()=>pm.classList.remove('added'),600); Cart.badge(); };
+      document.getElementById('pm-goto').onclick = () => { pm.close(); showPage('cart'); };
+      pm.showModal();
+    }
+
+    // Renderers
+    function renderHome() {
+      Products.seed();
+      const q = document.getElementById('searchInput').value.trim().toLowerCase();
+      const cat = document.getElementById('categoryFilter').value;
+      const sort = document.getElementById('sortBy').value;
+      let items = Products.all().filter(p => 
+        (!q || p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)) &&
+        (!cat || p.category === cat)
+      );
+      if (sort === 'price_asc') items.sort((a,b)=>a.price-b.price);
+      else if (sort === 'price_desc') items.sort((a,b)=>b.price-a.price);
+      else items.sort((a,b)=>b.id-a.id);
+
+      const grid = document.getElementById('productGrid');
+      grid.innerHTML = items.map(p => `
+        <div class="card">
+          <img src="${p.image_url}" alt="${p.name}">
+          <h3>${p.name}</h3>
+          <div class="price">${money(p.price)}</div>
+          <div class="controls">
+            <button class="btn" data-view="${p.id}">View</button>
+            <button class="btn" data-add="${p.id}">Add to cart</button>
+          </div>
+        </div>`).join('');
+
+      grid.querySelectorAll('[data-view]').forEach(btn=>{
+        btn.onclick = () => {
+          const id = Number(btn.getAttribute('data-view'));
+          const p = Products.all().find(x => x.id === id);
+          openProduct(p);
+        };
+      });
+      grid.querySelectorAll('[data-add]').forEach(btn=>{
+        btn.onclick = () => {
+          const id = Number(btn.getAttribute('data-add'));
+          const p = Products.all().find(x => x.id === id);
+          Cart.add(p,1);
+          btn.classList.add('added'); setTimeout(()=>btn.classList.remove('added'),600);
+        };
+      });
+    }
+
+    function renderCart() {
+      const tbody = document.querySelector('#cartTable tbody');
+      const items = Cart.get();
+      tbody.innerHTML = items.length ? items.map(i => `
+        <tr>
+          <td>${i.name}</td>
+          <td>${money(i.price)}</td>
+          <td><input type="number" min="0" value="${i.qty}" data-qty="${i.product_id}" /></td>
+          <td>${money(i.price * i.qty)}</td>
+          <td><button class="btn" data-remove="${i.product_id}">Remove</button></td>
+        </tr>`).join('') : `<tr><td colspan="5" class="muted">Your cart is empty.</td></tr>`;
+      document.getElementById('cartTotal').textContent = money(Cart.total());
+      tbody.querySelectorAll('[data-qty]').forEach(inp=>{
+        inp.onchange = () => {
+          Cart.update(Number(inp.getAttribute('data-qty')), Number(inp.value));
+          renderCart();
+        };
+      });
+      tbody.querySelectorAll('[data-remove]').forEach(btn=>{
+        btn.onclick = () => {
+          Cart.update(Number(btn.getAttribute('data-remove')), 0);
+          renderCart();
+        };
+      });
+      document.getElementById('clearCart').onclick = () => { Cart.clear(); renderCart(); };
+    }
+
+    function renderCheckout() {
+      const list = document.getElementById('summaryList');
+      const items = Cart.get();
+      list.innerHTML = items.map(i => `<li>${i.name} × ${i.qty} — ${money(i.price * i.qty)}</li>`).join('');
+      document.getElementById('sumTotal').textContent = money(Cart.total());
+      const saved = read(STORE.address, null);
+      if (saved) {
+        const f = document.getElementById('addressForm');
+        f.name.value = saved.name || '';
+        f.phone.value = saved.phone || '';
+        f.line1.value = saved.line1 || '';
+        f.city.value = saved.city || '';
+        f.region.value = saved.region || '';
+        f.notes.value = saved.notes || '';
+        document.getElementById('saveAddress').checked = true;
+      }
+
+      // Payment tab toggle (visual)
+      document.querySelectorAll('[data-pay]').forEach(btn=>{
+        btn.onclick = () => {
+          document.querySelectorAll('[data-pay]').forEach(b=>b.classList.remove('active'));
+          btn.classList.add('active');
+        };
+      });
+
+      document.getElementById('placeOrder').onclick = () => placeOrder();
+    }
+
+    function placeOrder() {
+      const f = document.getElementById('addressForm');
+      const address = {
+        name: f.name.value.trim(),
+        phone: f.phone.value.trim(),
+        line1: f.line1.value.trim(),
+        city: f.city.value.trim(),
+        region: f.region.value.trim(),
+        notes: f.notes.value.trim()
+      };
+      const items = Cart.get();
+      if (!items.length) { alert('Cart is empty.'); return; }
+      if (!address.name || !address.phone || !address.line1 || !address.city || !address.region) {
+        alert('Please fill all required address fields.');
+        return;
+      }
+      if (document.getElementById('saveAddress').checked) write(STORE.address, address);
+
+      // Mock payment reference
+      const payment_ref = 'PMT-' + Date.now() + '-' + Math.floor(Math.random()*9000+1000);
+      const total = Cart.total();
+
+      // Create order
+      const orderId = Math.floor(Math.random()*900000)+100000;
+      const order = {
+        id: orderId,
+        status: 'paid',
+        total_amount: total,
+        address,
+        payment_ref,
+        created_at: new Date().toISOString(),
+        items
+      };
+      Orders.add(order);
+      Cart.clear();
+
+      // Seed delivery record
+      Delivery.upsert({
+        order_id: orderId,
+        status: 'assigned',
+        current_location: 'Warehouse',
+        eta: nextHours(2)
+      });
+
+      // Simulate status progression
+      simulateDelivery(orderId);
+
+      // Go to tracking
+      location.hash = '#track=' + orderId;
+      showPage('track');
+    }
+
+    function renderOrders() {
+      const list = Orders.all();
+      const grid = document.getElementById('ordersList');
+      grid.innerHTML = list.length ? list.map(o => `
+        <div class="card">
+          <h3>Order #${o.id}</h3>
+          <p>Total: ${money(o.total_amount)}</p>
+          <p>Status: ${o.status}</p>
+          <div class="controls">
+            <button class="btn" onclick="location.hash='#track=${o.id}'; showPage('track');">Track</button>
+          </div>
+        </div>`).join('') : `<div class="muted">No orders yet.</div>`;
+    }
+
+    function renderTrackFromHash() {
+      const m = location.hash.match(/#track=(\d+)/);
+      const id = m ? Number(m[1]) : null;
+      if (!id) {
+        document.getElementById('trackView').innerHTML = '<div class="muted">Select an order from My orders to track.</div>';
+        return;
+      }
+      renderTrack(id);
+    }
+
+    function renderTrack(orderId) {
+      const order = Orders.byId(orderId);
+      const d = Delivery.forOrder(orderId) || {};
+      if (!order) {
+        document.getElementById('trackView').innerHTML = '<div class="muted">Order not found.</div>';
+        return;
+      }
+      const steps = ['paid','preparing','out_for_delivery','delivered'];
+      const activeIdx = steps.indexOf(order.status);
+      document.getElementById('trackView').innerHTML = `
+        <div class="card">
+          <h2>Order #${orderId}</h2>
+          <p>Total: ${money(order.total_amount)} • Status: ${order.status}</p>
+          <div class="timeline">
+            ${steps.map((s,i)=>`<div class="step" style="border-color:${i<=activeIdx?'#6cf0c2':'#1c2232'}; color:${i<=activeIdx?'#6cf0c2':''}">${s}</div>`).join('')}
+          </div>
+          <p>Delivery: ${d.status || 'assigned'} • Location: ${d.current_location || '-'} • ETA: ${d.eta || '-'}</p>
+          <table class="table"><thead><tr><th>Item</th><th>Qty</th><th>Line Total</th></tr></thead><tbody>
+          ${(order.items||[]).map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>${money(i.price*i.qty)}</td></tr>`).join('')}
+          </tbody></table>
+        </div>`;
+    }
+
+    // Simulated delivery progression
+    function simulateDelivery(orderId) {
+      // Step 1: preparing (after 10s)
+      setTimeout(() => {
+        updateOrderStatus(orderId, 'preparing');
+        Delivery.upsert({ order_id: orderId, status: 'picked_up', current_location: 'Packing' });
+        if (isTrackPage(orderId)) renderTrack(orderId);
+      }, 10000);
+      // Step 2: out for delivery (after 25s)
+      setTimeout(() => {
+        updateOrderStatus(orderId, 'out_for_delivery');
+        Delivery.upsert({ order_id: orderId, status: 'en_route', current_location: 'On the road', eta: nextHours(1) });
+        if (isTrackPage(orderId)) renderTrack(orderId);
+      }, 25000);
+      // Step 3: delivered (after 45s)
+      setTimeout(() => {
+        updateOrderStatus(orderId, 'delivered');
+        Delivery.upsert({ order_id: orderId, status: 'delivered', current_location: 'Customer', eta: new Date().toLocaleString() });
+        if (isTrackPage(orderId)) renderTrack(orderId);
+      }, 45000);
+    }
+
+    function updateOrderStatus(orderId, status) {
+      const os = Orders.all();
+      const idx = os.findIndex(o => o.id === orderId);
+      if (idx >= 0) { os[idx].status = status; write(STORE.orders, os); }
+    }
+
+    function isTrackPage(orderId) {
+      return !document.getElementById('page-track').classList.contains('hidden') &&
+             location.hash === '#track=' + orderId;
+    }
+
+    function nextHours(h) {
+      const d = new Date(Date.now() + h*3600000);
+      return d.toLocaleString();
+    }
+
+    // Admin
+    document.getElementById('seedProducts').onclick = () => { Products.seed(); renderAdmin(); renderHome(); };
+    document.getElementById('clearProducts').onclick = () => { Products.clear(); renderAdmin(); renderHome(); };
+
+    function renderAdmin() {
+      const ps = Products.all();
+      document.getElementById('kpi-orders').textContent = Orders.all().length;
+      document.getElementById('kpi-revenue').textContent = money(Orders.revenue());
+      document.getElementById('kpi-avg').textContent = 'Simulated';
+
+      const grid = document.getElementById('adminProducts');
+      grid.innerHTML = ps.length ? ps.map(p => `
+        <div class="card">
+          <img src="${p.image_url}" alt="${p.name}" />
+          <h3>${p.name}</h3>
+          <p class="muted">${p.category}</p>
+          <div class="flex">
+            <span class="price">${money(p.price)}</span>
+            <span class="pill">Stock: ${p.stock_qty}</span>
+          </div>
+          <div class="controls">
+            <button class="btn" data-dec="${p.id}">- Stock</button>
+            <button class="btn" data-inc="${p.id}">+ Stock</button>
+            <button class="btn" data-del="${p.id}">Delete</button>
+          </div>
+        </div>`).join('') : `<div class="muted">No products. Click "Seed sample products".</div>`;
+
+      grid.querySelectorAll('[data-dec]').forEach(b=>{
+        b.onclick = () => adjustStock(Number(b.getAttribute('data-dec')),-1);
+      });
+      grid.querySelectorAll('[data-inc]').forEach(b=>{
+        b.onclick = () => adjustStock(Number(b.getAttribute('data-inc')),+1);
+      });
+      grid.querySelectorAll('[data-del]').forEach(b=>{
+        b.onclick = () => deleteProduct(Number(b.getAttribute('data-del')));
+      });
+
+      // Deliveries list
+      const del = Delivery.all();
+      document.getElementById('adminDeliveries').innerHTML = del.length ? `
+        <table class="table">
+          <thead><tr><th>Order</th><th>Status</th><th>Location</th><th>ETA</th><th>Update</th></tr></thead>
+          <tbody>
+            ${del.map(d=>`
+              <tr>
+                <td>#${d.order_id}</td>
+                <td>${d.status || '-'}</td>
+                <td>${d.current_location || '-'}</td>
+                <td>${d.eta || '-'}</td>
+                <td>
+                  <button class="btn" data-status="${d.order_id}" data-to="en_route">Mark en route</button>
+                  <button class="btn" data-status="${d.order_id}" data-to="delivered">Mark delivered</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      ` : `<div class="muted">No deliveries yet.</div>`;
+
+      document.querySelectorAll('[data-status]').forEach(btn=>{
+        btn.onclick = () => {
+          const id = Number(btn.getAttribute('data-status'));
+          const to = btn.getAttribute('data-to');
+          Delivery.upsert({ order_id: id, status: to, current_location: to==='delivered'?'Customer':'On the road', eta: to==='delivered'?new Date().toLocaleString():nextHours(1) });
+          if (Orders.byId(id)) updateOrderStatus(id, to==='delivered' ? 'delivered' : 'out_for_delivery');
+          renderAdmin();
+          if (isTrackPage(id)) renderTrack(id);
+        };
+      });
+    }
+
+    function adjustStock(id, delta) {
+      const ps = Products.all();
+      const idx = ps.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        ps[idx].stock_qty = Math.max(0, (ps[idx].stock_qty || 0) + delta);
+        Products.set(ps);
+        renderAdmin(); renderHome();
+      }
+    }
+
+    function deleteProduct(id) {
+      const ps = Products.all().filter(p => p.id !== id);
+      Products.set(ps);
+      renderAdmin(); renderHome();
+    }
+
+    // Initialize
+    window.addEventListener('load', () => {
+      // Default to home; if hash contains track, open tracking
+      if (location.hash.startsWith('#track=')) showPage('track'); else showPage('home');
+    });
+  </script>
+</body>
+</html>
